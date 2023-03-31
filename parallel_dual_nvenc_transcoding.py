@@ -3,8 +3,10 @@ import queue
 import sys
 import pathlib
 import subprocess
+from subprocess import CREATE_NEW_CONSOLE, STDOUT, Popen, PIPE
 import threading
 import time
+import logging
 from datetime import datetime
 
 if getattr(sys, 'frozen', False):
@@ -57,8 +59,13 @@ def transcode(hwEnc):
         print()
         #print(cmd)
 
+        SW_HIDE = 0
+        SW_MINIMIZE = 6
         print(" ".join(cmd))
-        subprocess.call(cmd)
+        process = subprocess.call(cmd, 
+                        creationflags= CREATE_NEW_CONSOLE, 
+                        startupinfo= subprocess.STARTUPINFO(dwFlags=1, wShowWindow=SW_MINIMIZE),
+                        )
         q.task_done()
 
 def main():
