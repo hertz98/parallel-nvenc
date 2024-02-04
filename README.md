@@ -14,7 +14,7 @@ VideoIN directory contains the file that will be processed to VideoOUT via a que
 4. Done, the script will run two istances of ffmpeg until all videos are converted
 
 ## To Do list
-- [ ] Use path lib method instead of strings
+- [x] Use path lib instead of strings
 - [ ] Implement logging
 - [ ] Paths need to be in settings structure
 - [ ] Report time passed to convert each video

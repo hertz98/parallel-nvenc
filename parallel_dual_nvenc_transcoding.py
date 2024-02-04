@@ -1,7 +1,7 @@
 import os
 import queue
 import sys
-import pathlib
+from pathlib import Path
 import subprocess
 from subprocess import CREATE_NEW_CONSOLE, STDOUT, Popen, PIPE
 import threading
@@ -14,21 +14,8 @@ if getattr(sys, 'frozen', False):
 elif __file__:
     application_path = os.path.dirname(__file__) + '\\'
 
-inputDIR = r".\videoIN"
-outputDIR = r".\videoOUT"
-
-if not inputDIR[:1].isalpha():
-    if inputDIR[:1] == ".":
-        inputDIR = inputDIR[1:]
-    inputDIR = application_path + inputDIR
-
-if not outputDIR[:1].isalpha():
-    if outputDIR[:1] == ".":
-        outputDIR = outputDIR[1:]
-    outputDIR = application_path + outputDIR
-
-#inputDIR = r"C:\..."
-#outputDIR = r"C:\..."
+inputDIR = Path("videoIN")
+outputDIR = Path("videoOUT")
 
 settings = {
     "quality" : "36",
@@ -54,39 +41,38 @@ def transcode(hwEnc):
             cmd = sw_cmd
 
         cmd = cmd.split(" ") #Creo lista per subprocess
-        cmd.insert(cmd.index('-i') + 1, inputDIR + "\\" + item) 
-        cmd.append(outputDIR + "\\" + item[ : -len(settings["inputExt"]) ] + settings["outputExt"])
-        print()
-        #print(cmd)
 
+        cmd.insert(cmd.index('-i') + 1,  str( item.absolute() ))
+        cmd.append( str( outputDIR.joinpath(item.stem + '.' + settings["outputExt"] ).absolute() ))
+        print()
+        
         SW_HIDE = 0
         SW_MINIMIZE = 6
         print(" ".join(cmd))
-        process = subprocess.call(cmd, 
-                        creationflags= CREATE_NEW_CONSOLE, 
-                        startupinfo= subprocess.STARTUPINFO(dwFlags=1, wShowWindow=SW_MINIMIZE),
-                        )
+        try:
+            process = subprocess.check_call(cmd, 
+                            creationflags= CREATE_NEW_CONSOLE, 
+                            startupinfo= subprocess.STARTUPINFO(dwFlags=1, wShowWindow=SW_MINIMIZE),
+                            )
+        except Exception as e:
+            print(e)
+            # input(e)
         q.task_done()
 
 def main():
 
-    if not os.path.exists(inputDIR):
-            pathlib.Path(inputDIR).mkdir(parents=True, exist_ok=True)
-            print("Created folder: " + inputDIR + "\nWaiting for input")
-            input()
+    if not inputDIR.exists():
+        inputDIR.mkdir(parents=True, exist_ok=True)
+        input("Created folder: " + inputDIR.name + "\nWaiting for input")
 
-    if not os.path.exists(outputDIR):
-            pathlib.Path(outputDIR).mkdir(parents=True, exist_ok=True)
-            print("Created folder: " + outputDIR)
+    outputDIR.mkdir(parents=True, exist_ok=True)
 
     global hw_cmd, sw_cmd 
     hw_cmd = hw_cmd.replace("-cq", "-cq " + settings["quality"]).replace("scale_cuda=", "scale_cuda=" + settings["scale"])
     sw_cmd = sw_cmd.replace("-cq", "-cq " + settings["quality"]).replace("scale=", "scale=" + settings["scale"])
 
-    for filenames in os.listdir(inputDIR):
-        if filenames[-len(settings["inputExt"]) : ] != settings["inputExt"]:
-            continue
-        q.put(filenames)
+    for file in inputDIR.rglob("*." + settings["inputExt"]):
+        q.put(file)
 
     t1 = time.time()
     startTime = datetime.now()
