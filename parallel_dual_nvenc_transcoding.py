@@ -1,6 +1,4 @@
-import os
 import queue
-import sys
 from pathlib import Path
 import subprocess
 from subprocess import CREATE_NEW_CONSOLE, STDOUT, Popen, PIPE
@@ -9,76 +7,105 @@ import time
 import logging
 from datetime import datetime
 
-if getattr(sys, 'frozen', False):
-    application_path = os.path.dirname(sys.executable) + '\\'
-elif __file__:
-    application_path = os.path.dirname(__file__) + '\\'
-
-inputDIR = Path("videoIN")
-outputDIR = Path("videoOUT")
-
 settings = {
-    "quality" : "36",
-    "scale" : "1280:-1",
-    "inputExt" : "mp4",
-    "outputExt" : "mkv"
+    'inputDIR' : Path('videoIN'),
+    'outputDIR' : Path('videoOUT'),
+    'quality' : '36',
+    'scale' : '1280:-1',
+    'inputExt' : 'mp4',
+    'outputExt' : 'mkv'
 }
 
-hw_cmd = "ffmpeg -y -hide_banner -hwaccel cuda -hwaccel_output_format cuda -i -c:v hevc_nvenc -preset medium -cq -vf scale_cuda= -c:a copy"
-sw_cmd = "ffmpeg -y -hide_banner -i -c:v hevc_nvenc -preset medium -cq -vf scale= -c:a copy"
+args = {
+    'hw_args' : {
+        'ffmpeg' : None,
+        '-y' : None,
+        '-hide_banner' : None,
+        '-hwaccel' : 'cuda',
+        '-hwaccel_output_format' : 'cuda',
+        '-i' : None,
+        '-c:v' : 'hevc_nvenc',
+        '-preset' : 'medium',
+        '-cq' : settings["quality"],
+        '-vf' : None,
+        'scale_cuda=' : settings['scale'],
+        '-c:a' : 'copy',
+        '_OUTPUT' : None
+    },
+    'sw_args' : {
+        'ffmpeg' : None,
+        '-y' : None,
+        '-hide_banner' : None,
+        '-i' : None,
+        '-c:v' : 'hevc_nvenc',
+        '-preset' : 'medium',
+        '-cq' : settings["quality"],
+        '-vf' : None,
+        'scale=' : settings['scale'],
+        '-c:a' : 'copy',
+        '_OUTPUT' : None
+    },
+}
 
 q = queue.Queue()
 
-def transcode(hwEnc):
+def transcode(type: str):
     while True:
         if q.empty():
             return
-        item = q.get()
-        cmd = None
-        if hwEnc:
-            cmd = hw_cmd
-        else:
-            cmd = sw_cmd
+        input = q.get()
 
-        cmd = cmd.split(" ") #Creo lista per subprocess
+        global args
+        selArgs = dict(args[type])
+        selArgs['-i'] = str( input.absolute() )
+        selArgs['_OUTPUT'] = str( settings['outputDIR'].joinpath( input.stem + '.' + settings["outputExt"] ).absolute() )
 
-        cmd.insert(cmd.index('-i') + 1,  str( item.absolute() ))
-        cmd.append( str( outputDIR.joinpath(item.stem + '.' + settings["outputExt"] ).absolute() ))
-        print()
+        print(selArgs['-i'])
+
+        outArgs = []
+        for arg, argvalue in selArgs.items():
+            if (arg[-1] == '='):
+                outArgs.append(arg + argvalue)
+                continue
+            if arg != None:
+                outArgs.append(arg)
+            if argvalue != None:
+                outArgs.append(argvalue)
+
+        outArgs.remove('_OUTPUT')
         
-        SW_HIDE = 0
-        SW_MINIMIZE = 6
-        print(" ".join(cmd))
+        windowMode = {
+            'SW_HIDE' : 0,
+            'SW_NORMAL' : 1,
+            'SW_MINIMIZE' : 6
+        }
+    
         try:
-            process = subprocess.check_call(cmd, 
+            subprocess.call(outArgs, 
                             creationflags= CREATE_NEW_CONSOLE, 
-                            startupinfo= subprocess.STARTUPINFO(dwFlags=1, wShowWindow=SW_MINIMIZE),
+                            startupinfo= subprocess.STARTUPINFO(dwFlags=1, wShowWindow=windowMode['SW_MINIMIZE']),
                             )
         except Exception as e:
             print(e)
-            # input(e)
+
         q.task_done()
 
 def main():
 
-    if not inputDIR.exists():
-        inputDIR.mkdir(parents=True, exist_ok=True)
-        input("Created folder: " + inputDIR.name + "\nWaiting for input")
+    if not settings['inputDIR'].exists():
+        settings['inputDIR'].mkdir(parents=True, exist_ok=True)
+        input("Created folder: " + settings['inputDIR'].name + "\nWaiting for input")
 
-    outputDIR.mkdir(parents=True, exist_ok=True)
+    settings['outputDIR'].mkdir(parents=True, exist_ok=True)
 
-    global hw_cmd, sw_cmd 
-    hw_cmd = hw_cmd.replace("-cq", "-cq " + settings["quality"]).replace("scale_cuda=", "scale_cuda=" + settings["scale"])
-    sw_cmd = sw_cmd.replace("-cq", "-cq " + settings["quality"]).replace("scale=", "scale=" + settings["scale"])
-
-    for file in inputDIR.rglob("*." + settings["inputExt"]):
+    for file in settings['inputDIR'].rglob("*." + settings["inputExt"]):
         q.put(file)
 
     t1 = time.time()
     startTime = datetime.now()
 
-    threading.Thread(target=transcode, daemon=True, args=(0,)).start()
-    threading.Thread(target=transcode, daemon=True, args=(1,)).start()
+    threading.Thread(target=transcode, daemon=True, args=('hw_args',)).start()
+    threading.Thread(target=transcode, daemon=True, args=('sw_args',)).start()
     q.join()
 
     print("\n")

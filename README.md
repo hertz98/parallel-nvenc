@@ -16,5 +16,6 @@ VideoIN directory contains the file that will be processed to VideoOUT via a que
 ## To Do list
 - [x] Use path lib instead of strings
 - [ ] Implement logging
-- [ ] Paths need to be in settings structure
+- [X] Paths need to be in settings structure
+- [X] Better handling of args
 - [ ] Report time passed to convert each video
